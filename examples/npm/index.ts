@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { marked } from "marked";
 import { z } from "zod";
 
-// Two npm packages the platform doesn't provide. Only the bundle path can resolve them.
+// Two npm packages from package.json. worker-bundler fetches them at deploy time.
 const Post = z.object({ title: z.string().min(1), body: z.string() });
 
 const app = new Hono();

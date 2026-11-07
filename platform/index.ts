@@ -1,7 +1,5 @@
 import { Hono } from "hono";
-import { bundle } from "./bundle.ts";
-import { CompileError, compile, type Files } from "./compile.ts";
-import { libs } from "./libs.ts";
+import { BuildError, bundle, type Files } from "./bundle.ts";
 import type { Registry } from "./registry.ts";
 import { ui } from "./ui.ts";
 
@@ -16,7 +14,6 @@ type Env = {
 const APP_HOST = /^([a-z0-9-]{1,32})\.localhost(:\d+)?$/;
 const APP_NAME = /^[a-z0-9-]{1,32}$/;
 const COMPAT_DATE = "2026-11-01";
-const LIB_NAMES = new Set(Object.keys(libs));
 
 const registry = (env: Env) => env.REGISTRY.get(env.REGISTRY.idFromName("registry"));
 
@@ -33,8 +30,7 @@ async function serveApp(env: Env, name: string, req: Request): Promise<Response>
   const worker = env.LOADER.get(`${name}@${app.version}`, async () => ({
     compatibilityDate: COMPAT_DATE,
     mainModule: app.mainModule,
-    // Stripped apps import the platform's libraries; bundled apps carry their own.
-    modules: app.build === "bundle" ? app.modules : { ...libs, ...app.modules },
+    modules: app.modules,
     // No network for generated code. Swap in a service here to allow a list of hosts.
     globalOutbound: null,
   }));
@@ -70,23 +66,20 @@ platform.get("/api/apps/:name", async (c) => {
   return files ? c.json({ files }) : c.json({ error: "not found" }, 404);
 });
 
-// Deploy: TypeScript in, running app out. No build container.
-//   ?build=strip   (default) Sucrase per file, platform libraries, no bundling
-//   ?build=bundle  @cloudflare/worker-bundler: esbuild-wasm, npm deps from package.json
+// Deploy: TypeScript in, running app out. The build runs here, not in a container.
+// Send a package.json to use npm packages.
 platform.put("/api/apps/:name", async (c) => {
   const name = c.req.param("name");
   if (!APP_NAME.test(name)) return c.json({ error: "name: lowercase letters, digits and dashes" }, 400);
-  const build = c.req.query("build") === "bundle" ? "bundle" : "strip";
   const files = await readFiles(c.req.raw);
   if (!files) return c.json({ error: 'send JSON { files: { "index.ts": "..." } } or multipart, one field per file' }, 400);
   try {
-    const { modules, mainModule, ms } =
-      build === "bundle" ? await bundle(files) : compile(files, LIB_NAMES);
-    const version = await registry(c.env).put(name, files, mainModule, modules, build);
+    const { modules, mainModule, ms } = await bundle(files);
+    const version = await registry(c.env).put(name, files, mainModule, modules);
     const size = JSON.stringify(modules).length;
-    return c.json({ name, version, build, url: appUrl(name, c.req.raw), buildMs: Math.round(ms * 10) / 10, moduleBytes: size });
+    return c.json({ name, version, url: appUrl(name, c.req.raw), buildMs: Math.round(ms * 10) / 10, moduleBytes: size });
   } catch (e) {
-    if (e instanceof CompileError) return c.json({ error: e.message }, 400);
+    if (e instanceof BuildError) return c.json({ error: e.message }, 400);
     throw e;
   }
 });

@@ -9,7 +9,7 @@ app.get("/", (c) =>
   c.html(
     <main style="font-family: system-ui; max-width: 40rem; margin: 3rem auto">
       <h1>Hello from TypeScript</h1>
-      <p>Deployed as text. No build step.</p>
+      <p>Deployed as text, built inside the Worker.</p>
     </main>,
   ),
 );
@@ -36,7 +36,7 @@ export const ui = (apps: AppSummary[]) => html`<!doctype html>
   </head>
   <body>
     <h1>vibe platform</h1>
-    <p>Deploy TypeScript as text. workerd runs it in its own isolate at <code>&lt;name&gt;.localhost</code>.</p>
+    <p>Deploy TypeScript as text. The platform builds it with worker-bundler and runs it in its own isolate at <code>&lt;name&gt;.localhost</code>.</p>
 
     <h2>Apps</h2>
     ${apps.length
@@ -62,7 +62,7 @@ export const ui = (apps: AppSummary[]) => html`<!doctype html>
         });
         const body = await res.json();
         $("out").innerHTML = res.ok
-          ? "v" + body.version + " live in " + body.stripMs + " ms of stripping: <a href='" + body.url + "'>" + body.url + "</a>"
+          ? "v" + body.version + " built in " + body.buildMs + " ms: <a href='" + body.url + "'>" + body.url + "</a>"
           : "";
         if (!res.ok) $("out").textContent = body.error;
       };

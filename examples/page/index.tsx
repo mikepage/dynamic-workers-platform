@@ -6,9 +6,9 @@ const app = new Hono();
 
 app.get("/", (c) =>
   c.html(
-    <Layout title="JSX, no build">
+    <Layout title="JSX">
       <h1>Server-rendered JSX</h1>
-      <p>Three .tsx files, stripped and compiled one by one when deployed.</p>
+      <p>Three .tsx files, bundled into one module when deployed.</p>
       <Counter start={3} />
     </Layout>,
   ),

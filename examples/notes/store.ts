@@ -1,4 +1,4 @@
-// An enum and a class with a private field: more than type stripping alone can run.
+// An enum and a class with a private field: TypeScript that needs a real transform, not just type removal.
 export enum Priority {
   Low = "low",
   Normal = "normal",

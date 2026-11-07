@@ -1,28 +1,39 @@
 import { createWorker } from "worker-bundler";
-import { CompileError, MAIN_MODULES, type Files } from "./compile.ts";
 
-// The other deploy path: Cloudflare's @cloudflare/worker-bundler, the way VibeSDK
-// deploys generated apps. esbuild runs as WebAssembly inside this Worker, installs
-// npm dependencies from package.json, and bundles everything into JavaScript.
-// Apps get no platform libraries here: they ship their own through package.json.
-
-// Same Hono as the strip path, so the two paths run the same code.
-const DEFAULT_PACKAGE = JSON.stringify({ dependencies: { hono: "5.0.0-rc.1" } });
-
+// What a deploy sends: file name → source text, as the author or the AI wrote it.
+export type Files = Record<string, string>;
+// What Worker Loader takes: module name → source, or { js: source } and friends.
 export type LoaderModules = Record<string, string | Record<string, unknown>>;
 
+export class BuildError extends Error {}
+
+export const MAIN_MODULES = ["index.ts", "index.tsx", "index.js", "index.jsx"];
+
+// Apps that send no package.json still get Hono.
+const DEFAULT_PACKAGE = JSON.stringify({ dependencies: { hono: "5.0.0-rc.1" } });
+
+// Build with Cloudflare's @cloudflare/worker-bundler, the way VibeSDK builds previews.
+// esbuild runs as WebAssembly inside this Worker, fetches npm packages from
+// package.json, and bundles the app into JavaScript that Worker Loader accepts.
 export async function bundle(files: Files): Promise<{ modules: LoaderModules; mainModule: string; ms: number }> {
   const start = performance.now();
+  if (Object.keys(files).length === 0) throw new BuildError("no files");
   const entryPoint = MAIN_MODULES.find((m) => m in files);
-  if (!entryPoint) throw new CompileError(`add one of ${MAIN_MODULES.join(", ")}`);
+  if (!entryPoint) throw new BuildError(`add one of ${MAIN_MODULES.join(", ")}`);
   try {
-    const result = await createWorker({ files: { "package.json": DEFAULT_PACKAGE, ...files }, entryPoint });
+    const result = await createWorker({
+      files: { "package.json": DEFAULT_PACKAGE, ...files },
+      entryPoint,
+      // esbuild defaults to React's classic JSX; these apps use Hono's.
+      jsx: "automatic",
+      jsxImportSource: "hono/jsx",
+    });
     return {
       modules: result.modules as LoaderModules,
       mainModule: result.mainModule,
       ms: performance.now() - start,
     };
   } catch (e) {
-    throw new CompileError((e as Error).message);
+    throw new BuildError((e as Error).message);
   }
 }

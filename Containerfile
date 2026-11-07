@@ -16,5 +16,5 @@ COPY --from=fetch /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --from=fetch /workerd /usr/local/bin/workerd
 WORKDIR /srv
 EXPOSE 8080
-# --experimental: Worker Loader and typescript_strip_types are both experimental.
+# --experimental: Worker Loader and typescript_strip_types (for the platform's own code) are both experimental.
 CMD ["workerd", "serve", "--watch", "--experimental", "config.capnp"]
