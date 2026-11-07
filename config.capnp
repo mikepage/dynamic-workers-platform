@@ -20,6 +20,7 @@ const platform :Workerd.Worker = (
     (name = "index.ts", esModule = embed "platform/index.ts"),
     (name = "compile.ts", esModule = embed "platform/compile.ts"),
     (name = "registry.ts", esModule = embed "platform/registry.ts"),
+    (name = "bundle.ts", esModule = embed "platform/bundle.ts"),
     (name = "libs.ts", esModule = embed "platform/libs.ts"),
     (name = "ui.ts", esModule = embed "platform/ui.ts"),
 
@@ -27,6 +28,9 @@ const platform :Workerd.Worker = (
     (name = "hono", esModule = embed "vendor/hono/index.js"),
     (name = "hono/html", esModule = embed "vendor/hono/html.js"),
     (name = "sucrase", esModule = embed "vendor/sucrase.js"),
+    # @cloudflare/worker-bundler, bundled once with Node; it imports "./esbuild.wasm".
+    (name = "worker-bundler", esModule = embed "vendor/worker-bundler.js"),
+    (name = "esbuild.wasm", wasm = embed "vendor/esbuild.wasm"),
 
     # What apps can import. Text here, handed to each app as a module (platform/libs.ts).
     (name = "lib/hono", text = embed "vendor/hono/index.js"),
