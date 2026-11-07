@@ -1,0 +1,8 @@
+---
+interface Props { name: string }
+const { name } = Astro.props;
+---
+<p class="greeting">Hello, {name}.</p>
+<style>
+  .greeting { color: #0066cc; }
+</style>

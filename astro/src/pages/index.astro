@@ -1,0 +1,13 @@
+---
+import Greeting from "../components/Greeting.astro";
+const name = Astro.url.searchParams.get("name") ?? "Astro";
+const renderedAt = new Date().toISOString();
+---
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Astro on a Dynamic Worker</title></head>
+  <body>
+    <h1>Server-rendered Astro</h1>
+    <Greeting name={name} />
+    <p>Rendered at {renderedAt}.</p>
+  </body>
+</html>
