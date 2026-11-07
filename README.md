@@ -1,6 +1,7 @@
 # workerd-vibe-platform
 
-A small app platform on workerd. `PUT` TypeScript as text and get a running app at `<name>.localhost:8080`.
+A small app platform built as a Worker. `PUT` TypeScript as text and get a running app at `<name>.localhost:8080`.
+It runs locally on workerd, the open-source runtime behind Cloudflare Workers.
 
 - **Build:** [`@cloudflare/worker-bundler`](https://www.npmjs.com/package/@cloudflare/worker-bundler) 0.2.6,
   inside the platform Worker. It runs esbuild as WebAssembly, fetches npm packages from `package.json`, and
