@@ -1,0 +1,13 @@
+services:
+  platform:
+    build:
+      context: .
+      dockerfile: Containerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/srv:ro
+      - data:/data
+
+volumes:
+  data:
