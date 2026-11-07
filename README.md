@@ -21,6 +21,11 @@ workerd can strip TypeScript types itself (`typescript_strip_types`), but only f
 Code loaded at runtime never goes through it. So something has to build, and worker-bundler does it inside
 the Worker: esbuild compiled to WebAssembly, npm packages fetched from `package.json`, one bundled module out.
 
+worker-bundler is experimental. The first `createWorker()` call logs "This package is experimental and its API
+may change without notice". There's no file system in a Worker, so it gives esbuild its own plugin,
+`virtual-fs`, that resolves imports against the files you pass in and the packages it fetched. This repo pins
+version 0.2.6.
+
 ## What it costs
 
 Four apps, five deploys each, on a fresh platform. Raw data: [`results/`](results/).
@@ -41,8 +46,8 @@ The npm app only answers `POST /`, so its request timings are for a 404 from a s
 
 ## Surprises
 
-- **A missing package passes the build.** worker-bundler leaves unknown imports external without a word. The
-  deploy succeeds and the app fails on its first request:
+- **A missing package passes the build.** When the `virtual-fs` plugin can't resolve an import, it marks it
+  external instead of failing. The deploy succeeds and the app fails on its first request:
   `502 App bad failed: … No such module "left-pad"`.
 - **JSX defaults to React.** Without `jsx: "automatic"` and `jsxImportSource: "hono/jsx"`, a Hono TSX app builds
   fine and throws `React is not defined` on every request. The platform sets both (`platform/bundle.ts`).
@@ -60,7 +65,7 @@ The npm app only answers `POST /`, so its request timings are for a 404 from a s
 - Check every import against `package.json` before you accept a deploy. An agent can fix an error it gets back.
   A 502 later goes unseen.
 - Expect about half a second per preview. Fine for an agent loop, too slow for keystroke-speed live reload.
-- If you self-host, pass `--experimental` and pin your workerd version.
+- If you self-host, pass `--experimental` and pin your workerd and worker-bundler versions.
 
 ## Layout
 
