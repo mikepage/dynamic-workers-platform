@@ -1,10 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Files, LoaderModules } from "./bundle.ts";
 
-export type AppRecord = { name: string; version: number; mainModule: string; modules: LoaderModules };
+// hash identifies the built code. It's the Worker Loader id, so a deploy that changes
+// nothing reuses the isolate the smoke test already started.
+export type AppRecord = { name: string; version: number; hash: string; mainModule: string; modules: LoaderModules };
 export type AppSummary = { name: string; version: number; updated: string };
 
-// Every deployed app, in SQLite on local disk. One instance holds the whole registry.
+// Every deployed app, in SQLite. One instance holds the whole registry.
 export class Registry extends DurableObject {
   sql = this.ctx.storage.sql;
 
@@ -13,6 +15,7 @@ export class Registry extends DurableObject {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS apps (
       name TEXT PRIMARY KEY,
       version INTEGER NOT NULL,
+      hash TEXT NOT NULL,
       main TEXT NOT NULL,
       files TEXT NOT NULL,
       modules TEXT NOT NULL,
@@ -20,15 +23,15 @@ export class Registry extends DurableObject {
     )`);
   }
 
-  put(name: string, files: Files, mainModule: string, modules: LoaderModules): number {
+  put(name: string, files: Files, hash: string, mainModule: string, modules: LoaderModules): number {
     const row = this.sql
       .exec<{ version: number }>(
-        `INSERT INTO apps (name, version, main, files, modules, updated)
-         VALUES (?, 1, ?, ?, ?, datetime('now'))
-         ON CONFLICT (name) DO UPDATE SET version = version + 1, main = excluded.main,
+        `INSERT INTO apps (name, version, hash, main, files, modules, updated)
+         VALUES (?, 1, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT (name) DO UPDATE SET version = version + 1, hash = excluded.hash, main = excluded.main,
            files = excluded.files, modules = excluded.modules, updated = excluded.updated
          RETURNING version`,
-        name, mainModule, JSON.stringify(files), JSON.stringify(modules),
+        name, hash, mainModule, JSON.stringify(files), JSON.stringify(modules),
       )
       .one();
     return row.version;
@@ -36,18 +39,22 @@ export class Registry extends DurableObject {
 
   get(name: string): AppRecord | null {
     const rows = [
-      ...this.sql.exec<{ version: number; main: string; modules: string }>(
-        "SELECT version, main, modules FROM apps WHERE name = ?", name,
+      ...this.sql.exec<{ version: number; hash: string; main: string; modules: string }>(
+        "SELECT version, hash, main, modules FROM apps WHERE name = ?", name,
       ),
     ];
     if (rows.length === 0) return null;
     const r = rows[0];
-    return { name, version: r.version, mainModule: r.main, modules: JSON.parse(r.modules) };
+    return { name, version: r.version, hash: r.hash, mainModule: r.main, modules: JSON.parse(r.modules) };
   }
 
   source(name: string): Files | null {
     const rows = [...this.sql.exec<{ files: string }>("SELECT files FROM apps WHERE name = ?", name)];
     return rows.length ? JSON.parse(rows[0].files) : null;
+  }
+
+  remove(name: string): boolean {
+    return this.sql.exec("DELETE FROM apps WHERE name = ?", name).rowsWritten > 0;
   }
 
   list(): AppSummary[] {

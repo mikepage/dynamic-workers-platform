@@ -4,7 +4,11 @@ services:
       context: .
       dockerfile: Containerfile
     ports:
-      - "8080:8080"
+      # Localhost only: anyone who can reach the builder can spend your Workers AI quota.
+      - "127.0.0.1:8080:8080"
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./:/srv:ro
       - data:/data

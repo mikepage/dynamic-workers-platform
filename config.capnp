@@ -3,6 +3,7 @@ using Workerd = import "/workerd/workerd.capnp";
 const config :Workerd.Config = (
   services = [
     (name = "platform", worker = .platform),
+    (name = "ai", worker = .ai),
     (name = "data", disk = (path = "/data", writable = true)),
   ],
   sockets = [
@@ -20,6 +21,7 @@ const platform :Workerd.Worker = (
     (name = "index.ts", esModule = embed "platform/index.ts"),
     (name = "registry.ts", esModule = embed "platform/registry.ts"),
     (name = "bundle.ts", esModule = embed "platform/bundle.ts"),
+    (name = "generate.ts", esModule = embed "platform/generate.ts"),
     (name = "ui.ts", esModule = embed "platform/ui.ts"),
 
     # What the platform itself imports.
@@ -36,5 +38,18 @@ const platform :Workerd.Worker = (
   bindings = [
     (name = "LOADER", workerLoader = (id = "apps")),
     (name = "REGISTRY", durableObjectNamespace = "Registry"),
+    # Same run() as the Workers AI binding on Cloudflare (platform/ai.ts).
+    (name = "AI", service = (name = "ai", entrypoint = "WorkersAI")),
+  ],
+);
+
+# Workers AI for self-hosted workerd: calls the REST API with the account and token from .env.
+const ai :Workerd.Worker = (
+  compatibilityDate = "2026-11-01",
+  compatibilityFlags = ["typescript_strip_types"],
+  modules = [(name = "ai.ts", esModule = embed "platform/ai.ts")],
+  bindings = [
+    (name = "CLOUDFLARE_ACCOUNT_ID", fromEnvironment = "CLOUDFLARE_ACCOUNT_ID"),
+    (name = "CLOUDFLARE_API_TOKEN", fromEnvironment = "CLOUDFLARE_API_TOKEN"),
   ],
 );
