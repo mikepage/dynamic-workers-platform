@@ -11,7 +11,7 @@ mkdir -p results
 out=results/measure-$(date +%Y%m%d-%H%M%S).tsv
 printf "app\trun\tbuild_ms\tdeploy_s\tfirst_s\twarm_s\tmodule_bytes\tmem\n" | tee "$out"
 
-mem() { docker stats --no-stream --format '{{.MemUsage}}' workerd-vibe-platform-platform-1 | cut -d/ -f1 | tr -d ' '; }
+mem() { docker stats --no-stream --format '{{.MemUsage}}' "$(docker compose ps -q platform)" | cut -d/ -f1 | tr -d ' '; }
 
 deploy() { # folder name -> JSON
   local args=()

@@ -1,4 +1,4 @@
-# workerd-vibe-platform
+# dynamic-workers-platform
 
 A small app platform built as a Worker. `PUT` TypeScript as text and get a running app at `<name>.localhost:8080`.
 It runs locally on workerd, the open-source runtime behind Cloudflare Workers.
