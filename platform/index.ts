@@ -1,24 +1,25 @@
 import { Hono } from "hono";
-import { BuildError, bundle, type Built, type Files } from "./bundle.ts";
+import { BuildError, checkFiles, type Built, type Files, type LoaderModules } from "./checks.ts";
 import { generate, MODELS, type Step } from "./generate.ts";
-import type { Registry } from "./registry.ts";
-import { ui } from "./ui.ts";
+import { ui, type AppSummary } from "./ui.ts";
 
-export { Registry } from "./registry.ts";
-
-type Env = {
-  LOADER: WorkerLoader;
-  REGISTRY: DurableObjectNamespace<Registry>;
-  AI: Ai;
+// The platform runs as a Dynamic Worker. boot.js built it with worker-bundler and passes
+// in two bindings: HOST (build, start and store apps) and AI (Workers AI).
+type Host = {
+  build(files: Files, entryPoint: string): Promise<Built>;
+  smoke(name: string, hash: string, built: Built): Promise<{ status: number; body: string }>;
+  serve(name: string, request: Request): Promise<Response>;
+  put(name: string, files: Files, hash: string, mainModule: string, modules: LoaderModules): Promise<number>;
+  source(name: string): Promise<Files | null>;
+  remove(name: string): Promise<boolean>;
+  list(): Promise<AppSummary[]>;
 };
+type Env = { HOST: Host; AI: Ai };
 
 // Apps live at /apps/<name>/ and at <name>.localhost:8080.
 const APP_HOST = /^([a-z0-9-]{1,32})\.localhost(:\d+)?$/;
 const APP_PATH = /^\/apps\/([a-z0-9-]{1,32})(\/.*)?$/;
 const APP_NAME = /^[a-z0-9-]{1,32}$/;
-const COMPAT_DATE = "2026-11-01";
-
-const registry = (env: Env) => env.REGISTRY.get(env.REGISTRY.idFromName("registry"));
 
 async function hashOf(built: Built): Promise<string> {
   const data = new TextEncoder().encode(JSON.stringify([built.mainModule, built.modules]));
@@ -26,32 +27,25 @@ async function hashOf(built: Built): Promise<string> {
   return [...digest.slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// One isolate per name@hash. Worker Loader caches it, so the smoke test warms the
-// isolate that serves the app afterwards.
-const load = (env: Env, name: string, hash: string, built: Pick<Built, "mainModule" | "modules">) =>
-  env.LOADER.get(`${name}@${hash}`, async () => ({
-    compatibilityDate: COMPAT_DATE,
-    mainModule: built.mainModule,
-    modules: built.modules,
-    // No network for generated code.
-    globalOutbound: null,
-  }));
-
-// Build, start, request GET /, and only then store. Every failure is a BuildError with a
-// message the model can fix.
+// Check, build, start, request GET /, and only then store. Every failure is a
+// BuildError with a message the model can fix.
 async function deploy(env: Env, name: string, files: Files) {
-  const built = await bundle(files);
-  const hash = await hashOf(built);
-  let res: Response;
+  const entryPoint = checkFiles(files);
+  let built: Built;
   try {
-    res = await load(env, name, hash, built).getEntrypoint().fetch(new Request("http://app/"));
+    built = await env.HOST.build(files, entryPoint);
+  } catch (e) {
+    throw new BuildError((e as Error).message);
+  }
+  const hash = await hashOf(built);
+  let res: { status: number; body: string };
+  try {
+    res = await env.HOST.smoke(name, hash, built);
   } catch (e) {
     throw new BuildError(`GET / threw: ${(e as Error).message}`);
   }
-  if (res.status >= 500) {
-    throw new BuildError(`GET / returned ${res.status}:\n${(await res.text()).slice(0, 2000)}`);
-  }
-  const version = await registry(env).put(name, files, hash, built.mainModule, built.modules);
+  if (res.status >= 500) throw new BuildError(`GET / returned ${res.status}:\n${res.body}`);
+  const version = await env.HOST.put(name, files, hash, built.mainModule, built.modules);
   return {
     name,
     version,
@@ -59,16 +53,6 @@ async function deploy(env: Env, name: string, files: Files) {
     buildMs: Math.round(built.ms),
     moduleBytes: JSON.stringify(built.modules).length,
   };
-}
-
-async function serveApp(env: Env, name: string, req: Request): Promise<Response> {
-  const app = await registry(env).get(name);
-  if (!app) return new Response(`No app named ${name}.`, { status: 404 });
-  try {
-    return await load(env, name, app.hash, app).getEntrypoint().fetch(req);
-  } catch (e) {
-    return new Response(`App ${name} failed:\n${(e as Error).message}`, { status: 502 });
-  }
 }
 
 // A deploy is JSON ({ files }) or multipart from curl, one field per file.
@@ -86,17 +70,17 @@ async function readFiles(req: Request): Promise<Files | null> {
 
 const platform = new Hono<{ Bindings: Env }>();
 
-platform.get("/", async (c) => c.html(ui(await registry(c.env).list(), MODELS)));
+platform.get("/", async (c) => c.html(ui(await c.env.HOST.list(), MODELS)));
 
-platform.get("/api/apps", async (c) => c.json(await registry(c.env).list()));
+platform.get("/api/apps", async (c) => c.json(await c.env.HOST.list()));
 
 platform.get("/api/apps/:name", async (c) => {
-  const files = await registry(c.env).source(c.req.param("name"));
+  const files = await c.env.HOST.source(c.req.param("name"));
   return files ? c.json({ files }) : c.json({ error: "not found" }, 404);
 });
 
 platform.delete("/api/apps/:name", async (c) =>
-  (await registry(c.env).remove(c.req.param("name"))) ? c.body(null, 204) : c.json({ error: "not found" }, 404),
+  (await c.env.HOST.remove(c.req.param("name"))) ? c.body(null, 204) : c.json({ error: "not found" }, 404),
 );
 
 // Deploy files as they are.
@@ -120,7 +104,7 @@ platform.post("/api/apps/:name/generate", async (c) => {
   const body = await c.req.json<{ prompt?: string; model?: string }>().catch(() => ({}) as { prompt?: string; model?: string });
   if (!body.prompt?.trim()) return c.json({ error: "send JSON { prompt }" }, 400);
   const model = body.model && MODELS.includes(body.model) ? body.model : MODELS[0];
-  const current = await registry(c.env).source(name);
+  const current = await c.env.HOST.source(name);
   try {
     const out = await generate(c.env.AI, { prompt: body.prompt, model, current }, (files) => deploy(c.env, name, files));
     return c.json({ ...out.result, model, steps: out.steps, files: out.files });
@@ -134,12 +118,11 @@ export default {
   fetch(req: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(req.url);
     const host = (req.headers.get("host") ?? url.host).match(APP_HOST);
-    if (host) return serveApp(env, host[1], req);
+    if (host) return env.HOST.serve(host[1], req);
     const path = url.pathname.match(APP_PATH);
     if (path) {
       if (!path[2]) return Response.redirect(`${url.origin}/apps/${path[1]}/`, 301);
-      const inner = new URL(path[2] + url.search, url.origin);
-      return serveApp(env, path[1], new Request(inner, req));
+      return env.HOST.serve(path[1], new Request(new URL(path[2] + url.search, url.origin), req));
     }
     return platform.fetch(req, env, ctx);
   },

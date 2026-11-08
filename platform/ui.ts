@@ -1,5 +1,5 @@
 import { html, raw } from "hono/html";
-import type { AppSummary } from "./registry.ts";
+export type AppSummary = { name: string; version: number; updated: string };
 
 // Start on a new app; existing ones are in the name field's list.
 const freshName = (apps: AppSummary[]) => {

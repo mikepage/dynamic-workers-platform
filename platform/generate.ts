@@ -1,4 +1,4 @@
-import { BuildError, type Files } from "./bundle.ts";
+import { BuildError, type Files } from "./checks.ts";
 
 // Workers AI models offered in the builder. All take chat messages.
 // Kimi K2.7 Code is code-tuned; Qwen2.5 Coder is smaller and faster.

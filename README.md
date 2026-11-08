@@ -1,14 +1,18 @@
 # dynamic-workers-platform
 
 An open-source vibe-coding example you run yourself. Describe an app, Workers AI writes it, and it runs a second
-later at `/apps/<name>/`. The platform is a Worker, run locally on workerd, the open-source runtime behind
-Cloudflare Workers.
+later at `/apps/<name>/`. It runs locally on workerd, the open-source runtime behind Cloudflare Workers.
 
-- **Write:** Workers AI through the `AI` binding (`env.AI.run()`). On workerd, `AI` is a small Worker with the same
-  `run()` that calls the Workers AI REST API (`platform/ai.ts`). Models: Kimi K2.7 Code, Qwen2.5 Coder.
-- **Build:** [`@cloudflare/worker-bundler`](https://www.npmjs.com/package/@cloudflare/worker-bundler) 0.2.6,
-  inside the platform Worker. It runs esbuild as WebAssembly, fetches npm packages from `package.json`, and
-  bundles each app into one module.
+Everything is built with worker-bundler and run with Worker Loader, the platform included. No Node, Bun or Deno,
+and no experimental compatibility flag.
+
+- **Boot:** `boot.js`, the one plain-JavaScript Worker. It holds Worker Loader, the Durable Object and the Workers AI
+  account, builds the platform's TypeScript in `platform/`, and runs it as a Dynamic Worker. The platform gets two
+  bindings, `HOST` and `AI`, and nothing else.
+- **Write:** Workers AI through `env.AI.run()`. Self-hosted, `AI` calls the Workers AI REST API. Models: Kimi K2.7
+  Code, Qwen2.5 Coder.
+- **Build:** [`@cloudflare/worker-bundler`](https://www.npmjs.com/package/@cloudflare/worker-bundler) 0.2.6. It runs
+  esbuild as WebAssembly, fetches npm packages from `package.json`, and bundles each app into one module.
 - **Run:** Worker Loader (Dynamic Workers). Each app gets its own isolate and `globalOutbound: null`.
 - **Store:** a Durable Object with SQLite keeps each app's source and built modules.
 - **Runtime:** workerd `v1.20261107.1` with `--experimental`, in `debian:13-slim`.
@@ -42,6 +46,7 @@ Four apps, five deploys each, on a fresh platform. Raw data: [`results/`](result
 | First request to a new version | 8–17 ms; 25–27 ms for the npm app |
 | Warm request | 3–6 ms |
 | Platform memory | 105 MB idle, 419 MB after the first build |
+| Platform boot: build `platform/` on the first request | 775 ms; 3 ms per request after |
 
 The first build loads esbuild's WebAssembly, about 310 MB, which stays until restart.
 
@@ -82,17 +87,16 @@ work. So an Astro app needs Node for the build and a Dynamic Worker for the run.
 
 | Path | What |
 |---|---|
-| `config.capnp` | Platform Worker, Worker Loader and Durable Object bindings |
+| `config.capnp` | The boot Worker, its bindings, and the platform's TypeScript as text modules |
+| `boot.js` | Builds and runs the platform; `HOST` and `AI` entrypoints; the SQLite registry |
 | `platform/index.ts` | `/apps/<name>/` → app; builder, deploy and generate API |
 | `platform/generate.ts` | Prompt, model call, file parsing and the retry loop |
-| `platform/ai.ts` | `AI` binding for workerd, over the Workers AI REST API |
-| `platform/bundle.ts` | Import check, then the build with a default `package.json` and Hono JSX |
-| `platform/registry.ts` | App registry in SQLite |
+| `platform/checks.ts` | Entry file and import checks before a build |
 | `platform/ui.ts` | Builder page |
 | `examples/` | `starter` (Hono starter), `notes` (enum, validator), `page` (TSX components), `npm` (`zod`, `marked`) |
 | `astro/` | Astro SSR app; `deploy.sh` builds it with Node in a container and deploys the output |
 | `deploy.sh`, `measure.sh` | Deploy a folder with curl; log build, request times, size and memory |
-| `vendor/` | `worker-bundler.js`, `esbuild.wasm`, and the Hono the platform UI uses (`vendor.sh`) |
+| `vendor/` | `worker-bundler.js` and `esbuild.wasm` |
 
 ## Run
 
