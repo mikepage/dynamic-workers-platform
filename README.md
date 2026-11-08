@@ -58,24 +58,6 @@ The first build loads esbuild's WebAssembly, about 310 MB, which stays until res
   Without them a Hono TSX app throws `React is not defined`.
 - **Loaded Workers need their own flags.** Experimental flags on the platform don't carry over to the apps it loads.
 
-## Astro
-
-worker-bundler runs esbuild, which has no loader for `.astro` files. Sending Astro source fails at the build:
-`index.astro:2:7: ERROR: Expected "(" but found "Greeting"`.
-
-The output of `astro build` runs fine. With `@astrojs/cloudflare`, Astro builds a Worker (`dist/server/entry.mjs`
-plus chunks), and the platform loads it as a Dynamic Worker unchanged: server rendering, props and scoped CSS all
-work. So an Astro app needs Node for the build and a Dynamic Worker for the run.
-
-| Astro 7.4.7, one page and one component | |
-|---|---|
-| `npm install`, fresh | 34 s, 575 MB in `node_modules` |
-| `astro build` | 3 s |
-| Deploy of the built output | 0.5–0.8 s, 621 KB |
-| Warm request | 4.5 ms |
-
-`astro/deploy.sh` does both steps: the build in a `node:24-slim` container, then a deploy of the output.
-
 ## Advice
 
 - Run the bundler in its own Worker or Durable Object, apart from the one serving traffic.
@@ -94,7 +76,6 @@ work. So an Astro app needs Node for the build and a Dynamic Worker for the run.
 | `platform/checks.ts` | Entry file and import checks before a build |
 | `platform/ui.ts` | Builder page |
 | `examples/` | `starter` (Hono starter), `notes` (enum, validator), `page` (TSX components), `npm` (`zod`, `marked`) |
-| `astro/` | Astro SSR app; `deploy.sh` builds it with Node in a container and deploys the output |
 | `deploy.sh`, `measure.sh` | Deploy a folder with curl; log build, request times, size and memory |
 | `vendor/` | `worker-bundler.js` and `esbuild.wasm` |
 
