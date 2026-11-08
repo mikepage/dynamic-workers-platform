@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@plugin "./brand.ts";
+
+/* Classes only client-side code adds, so they never show up in rendered HTML. */
+@source inline("bg-emerald-500 text-white");
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand: oklch(0.55 0.2 250);
+  --color-brand-dark: oklch(0.45 0.2 250);
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@utility content-auto {
+  content-visibility: auto;
+}
+
+@layer components {
+  .btn {
+    @apply inline-block rounded-lg bg-brand px-4 py-2 font-medium text-white hover:bg-brand-dark;
+  }
+}

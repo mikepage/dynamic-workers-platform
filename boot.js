@@ -33,6 +33,8 @@ async function build(files, entryPoint) {
     // esbuild defaults to React's classic JSX; these apps use Hono's.
     jsx: "automatic",
     jsxImportSource: "hono/jsx",
+    // A Worker serves CSS, it doesn't bundle it: `import css from "./app.css"` is a string.
+    loader: { ".css": "text" },
   });
   return { mainModule: result.mainModule, modules: result.modules, ms: performance.now() - start };
 }

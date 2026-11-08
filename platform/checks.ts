@@ -10,7 +10,7 @@ export const MAIN_MODULES = ["index.ts", "index.tsx", "index.js", "index.jsx"];
 
 const DEFAULT_PACKAGE = '{ "dependencies": { "hono": "5.0.0-rc.1" } }';
 
-const IMPORT = /(?:\bimport\s*(?:[\w*{}\s,$]+\s*from\s*)?|\bexport\s*[\w*{}\s,$]+\s*from\s*|\bimport\s*\(\s*)["']([^"']+)["']/g;
+const IMPORT = /(?:(?<![\w$.@])import\s*(?:[\w*{}\s,$]+\s*from\s*)?|(?<![\w$.@])export\s*[\w*{}\s,$]+\s*from\s*|(?<![\w$.@])import\s*\(\s*)["']([^"']+)["']/g;
 
 // What must hold before a build: an entry file, and every bare import in package.json.
 // worker-bundler marks an import it can't resolve as external and builds anyway, so a

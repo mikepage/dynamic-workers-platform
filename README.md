@@ -50,12 +50,39 @@ Four apps, five deploys each, on a fresh platform. Raw data: [`results/`](result
 
 The first build loads esbuild's WebAssembly, about 310 MB, which stays until restart.
 
+## Tailwind
+
+`examples/tailwind` is Hono with Tailwind v4, built and styled inside the Worker. Tailwind's compiler is plain
+JavaScript; only its file scanner (Oxide) and minifier (Lightning CSS) are native. So a middleware renders the
+page, collects the class names from the HTML, and asks `compile()` for exactly that CSS.
+
+Everything `@tailwindcss/postcss` supports in a stylesheet works: `@import "tailwindcss"`, `@theme`, `@utility`,
+`@custom-variant`, `@apply`, `@source inline()` and `@plugin`. `examples/tailwind/compare.sh` runs the same
+stylesheet and page through `@tailwindcss/postcss` in Node:
+
+| | Worker | `@tailwindcss/postcss` | with `optimize: true` |
+|---|---|---|---|
+| CSS | 14,665 bytes | 14,725 bytes | 12,202 bytes |
+| Gzipped | 3,560 bytes | 3,563 bytes | 3,311 bytes |
+
+Without optimizing, the output is the same apart from one rule: Oxide also scans the page's text, so PostCSS
+generated `.bg-brand` for a word in a paragraph. Optimizing runs Lightning CSS, which minifies, flattens nested
+rules and adds a few prefixes. That's 7% smaller gzipped, and the one part the Worker doesn't do.
+
+Tailwind adds 38 ms to the first request of a new isolate, where it compiles the stylesheet, and under 1 ms after.
+The build with Tailwind takes about 1.2 s and comes to 546 KB.
+
 ## Surprises
 
 - **A missing package deploys.** `virtual-fs` marks an import it can't resolve as external, and the app fails on
   its first request. The platform checks imports against `package.json` before building.
 - **JSX is React's by default.** The platform passes `jsx: "automatic"` and `jsxImportSource: "hono/jsx"`.
   Without them a Hono TSX app throws `React is not defined`.
+- **`.css` imports aren't strings.** esbuild bundles CSS with its own loader and ignores `with { type: "text" }`.
+  The platform passes `loader: { ".css": "text" }`, so `import css from "./styles.css"` gives the text.
+- **`require()` can get the ESM build.** `@tailwindcss/typography` calls `require("tailwindcss/colors")`, gets
+  `undefined` colors when bundled by worker-bundler, and crashes at startup. Node returns the colors. The smoke test
+  caught it before the app was saved. ESM plugins work.
 - **Loaded Workers need their own flags.** Experimental flags on the platform don't carry over to the apps it loads.
 
 ## Advice
@@ -75,7 +102,7 @@ The first build loads esbuild's WebAssembly, about 310 MB, which stays until res
 | `platform/generate.ts` | Prompt, model call, file parsing and the retry loop |
 | `platform/checks.ts` | Entry file and import checks before a build |
 | `platform/ui.ts` | Builder page |
-| `examples/` | `starter` (Hono starter), `notes` (enum, validator), `page` (TSX components), `npm` (`zod`, `marked`) |
+| `examples/` | `starter` (Hono starter), `notes` (enum, validator), `page` (TSX components), `npm` (`zod`, `marked`), `tailwind` (Tailwind v4 compiled in the Worker) |
 | `deploy.sh`, `measure.sh` | Deploy a folder with curl; log build, request times, size and memory |
 | `vendor/` | `worker-bundler.js` and `esbuild.wasm` |
 
